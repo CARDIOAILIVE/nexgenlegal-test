@@ -668,9 +668,9 @@ footer a:hover{color:var(--text)}
         <span id="ldpOutTitle" style="font-family:var(--mono);font-size:9.5px;color:var(--dim);letter-spacing:1px;text-transform:uppercase">Document Output</span>
         <div style="display:flex;gap:6px">
           <button class="ldp-out-btn" id="ldpCopyBtn" onclick="ldpCopy()" style="display:none">⌘ Copy</button>
-          <button class="ldp-out-btn" id="ldpDlBtn" onclick="ldpDownload()" style="display:none">↓ .md</button>
+          <button class="ldp-out-btn" id="ldpPdfBtn" onclick="ldpDownloadPdf()" style="display:none;border-color:rgba(220,50,50,.4);color:#FF6B6B">↓ PDF</button>
+          <button class="ldp-out-btn" id="ldpDocxBtn" onclick="ldpDownloadDocx()" style="display:none;border-color:rgba(0,120,215,.4);color:#4DA6FF">↓ Word</button>
           <button class="ldp-out-btn" id="ldpSaveBtn" onclick="ldpSave()" style="display:none;border-color:rgba(0,200,255,.3);color:#00C8FF">✐ Save</button>
-          <button class="ldp-out-btn" id="ldpPrintBtn" onclick="ldpPrint()" style="display:none">🖨 Print / PDF</button>
         </div>
       </div>
       <div class="ldp-empty" id="ldpEmpty">
@@ -876,7 +876,7 @@ function openLiveDemo(){
   document.getElementById('ldpEmpty').style.display='flex';
   document.getElementById('ldpThinking').style.display='none';
   document.getElementById('ldpDoc').style.display='none';
-  ['ldpCopyBtn','ldpDlBtn','ldpSaveBtn','ldpPrintBtn'].forEach(function(id){var e=document.getElementById(id);if(e)e.style.display='none';});
+  ['ldpCopyBtn','ldpPdfBtn','ldpDocxBtn','ldpSaveBtn'].forEach(function(id){var e=document.getElementById(id);if(e)e.style.display='none';});
   ldpRenderSaved();
 }
 
@@ -960,7 +960,7 @@ async function ldpGenerate(){
     }
     docEl.innerHTML=ldpMdR(_ldpContent);
     document.getElementById('ldpOutTitle').textContent=docLabel;
-    ['ldpCopyBtn','ldpDlBtn','ldpSaveBtn','ldpPrintBtn'].forEach(function(id){var e=document.getElementById(id);if(e)e.style.display='inline-block';});
+    ['ldpCopyBtn','ldpPdfBtn','ldpDocxBtn','ldpSaveBtn'].forEach(function(id){var e=document.getElementById(id);if(e)e.style.display='inline-block';});
     document.getElementById('ldpStatusTxt').textContent='NexGen Ultra · Complete ✓';
     var dot=document.getElementById('ldpDot');if(dot)dot.style.background='#00E87A';
     // Increment free doc counter
@@ -1015,28 +1015,93 @@ function ldpMdR(text){
 
 function ldpCopy(){if(!_ldpContent)return;if(navigator.clipboard)navigator.clipboard.writeText(_ldpContent).then(function(){toast('Document copied ✓','ok');});}
 
-function ldpDownload(){
+function ldpDownloadPdf(){
   if(!_ldpContent)return;
   var docType=(document.getElementById('ldpDocType')||{}).value||'document';
-  var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([_ldpContent],{type:'text/markdown'}));
-  a.download='nexgenlegal-'+docType+'.md';document.body.appendChild(a);a.click();document.body.removeChild(a);
-  setTimeout(function(){URL.revokeObjectURL(a.href);},3000);toast('Downloaded ✓','ok');
+  var selEl=document.getElementById('ldpDocType');
+  var docLabel=selEl?(selEl.options[selEl.selectedIndex]||{}).text||docType:docType;
+  // Build styled HTML for PDF printing
+  var css='@page{margin:2cm}'
+    +'body{font-family:Georgia,serif;max-width:none;margin:0;color:#111;line-height:1.85;font-size:12pt;padding:0}'
+    +'.header{border-bottom:3px solid #00C8FF;padding-bottom:10px;margin-bottom:20px}'
+    +'.header h1{font-size:18pt;margin:0 0 4px;letter-spacing:-.5px}'
+    +'.header p{font-size:9pt;color:#666;margin:0;font-family:monospace}'
+    +'h1{font-size:16pt;border-bottom:2px solid #00C8FF;padding-bottom:6px;margin:20px 0 10px}'
+    +'h2{font-size:14pt;margin:18px 0 8px;padding-bottom:4px;border-bottom:1px solid #ddd}'
+    +'h3{font-size:10pt;text-transform:uppercase;letter-spacing:1.5px;color:#0099CC;margin:14px 0 5px}'
+    +'p{margin:0 0 10px}'
+    +'ul,ol{padding-left:20px;margin:6px 0 12px}'
+    +'li{margin-bottom:5px}'
+    +'blockquote{border-left:3px solid #00C8FF;padding:8px 14px;background:#f0f8ff;margin:10px 0;font-style:italic}'
+    +'table{width:100%;border-collapse:collapse;margin:12px 0;font-size:11pt}'
+    +'th{background:#e8f4f8;padding:7px 10px;text-align:left;font-size:9pt;text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid #00C8FF}'
+    +'td{padding:7px 10px;border-bottom:1px solid #ddd}'
+    +'.footer{margin-top:30px;padding-top:10px;border-top:1px solid #ddd;font-size:8pt;color:#999;font-family:monospace}';
+  var now = new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
+  var w=window.open('','_blank');
+  if(!w){toast('Popup blocked — allow popups to download PDF','err');return;}
+  w.document.open();
+  w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+docLabel+'</title><style>'+css+'</style></head><body>'
+    +'<div class="header"><h1>'+docLabel+'</h1><p>Generated by NexGenLegal · NexGen Ultra AI · Corverxis Technologies · '+now+'</p></div>'
+    +ldpMdR(_ldpContent)
+    +'<div class="footer">NexGenLegal · corverxis.com · This document was AI-generated and should be reviewed by a qualified legal professional before use.</div>'
+    +'</body></html>');
+  w.document.close();
+  w.focus();
+  // Auto-trigger print dialog (Save as PDF)
+  setTimeout(function(){
+    w.print();
+    toast('Save as PDF — select "Save to PDF" in the print dialog ✓','ok');
+  }, 600);
 }
 
-function ldpPrint(){
+function ldpDownloadDocx(){
   if(!_ldpContent)return;
-  var w=window.open('','_blank');if(!w){toast('Popup blocked — use Download','err');return;}
-  var css='body{font-family:Georgia,serif;max-width:800px;margin:40px auto;color:#111;line-height:1.8;font-size:13pt;padding:0 24px}'
-    +'h1{font-size:20pt;border-bottom:2px solid #00C8FF;padding-bottom:8px;margin:0 0 12px}'
-    +'h2{font-size:16pt;margin-top:24pt;border-bottom:1px solid #ddd;padding-bottom:4px}'
-    +'h3{font-size:10pt;text-transform:uppercase;letter-spacing:1.5px;color:#0099CC;margin-top:16pt}'
-    +'blockquote{border-left:3px solid #00C8FF;padding:8pt 12pt;background:#fdf8ec}'
-    +'@media print{body{margin:0}}';
-  w.document.open();
-  w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><style>'+css+'</style></head><body>'+ldpMdR(_ldpContent)+'</body></html>');
-  w.document.close();w.focus();
-  setTimeout(function(){w.print();},400);
+  var docType=(document.getElementById('ldpDocType')||{}).value||'document';
+  var selEl=document.getElementById('ldpDocType');
+  var docLabel=selEl?(selEl.options[selEl.selectedIndex]||{}).text||docType:docType;
+  var now=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
+  // Convert markdown to Word-compatible HTML then wrap in Word XML envelope
+  var htmlContent=ldpMdR(_ldpContent);
+  // Word XML document envelope — opens natively in Microsoft Word
+  var wordXml='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">'
+    +'<head><meta charset="UTF-8"/>'
+    +'<style>'
+    +'body{font-family:Calibri,Arial,sans-serif;font-size:11pt;line-height:1.8;margin:2cm}'
+    +'h1{font-family:Cambria,Georgia,serif;font-size:16pt;border-bottom:2pt solid #00A3CC;padding-bottom:5pt;margin-bottom:10pt}'
+    +'h2{font-family:Cambria,Georgia,serif;font-size:13pt;margin-top:16pt;margin-bottom:6pt;border-bottom:1pt solid #ccc;padding-bottom:3pt}'
+    +'h3{font-size:10pt;text-transform:uppercase;letter-spacing:1pt;color:#0099CC;margin-top:12pt;margin-bottom:4pt}'
+    +'p{margin-bottom:8pt}'
+    +'ul,ol{margin:6pt 0 10pt;padding-left:18pt}'
+    +'li{margin-bottom:4pt}'
+    +'table{width:100%;border-collapse:collapse;margin:10pt 0}'
+    +'th{background:#E8F4F8;padding:5pt 8pt;text-align:left;font-size:9pt;font-weight:bold;border-bottom:1pt solid #00A3CC}'
+    +'td{padding:5pt 8pt;border-bottom:0.5pt solid #ddd}'
+    +'blockquote{border-left:2pt solid #00A3CC;padding:6pt 12pt;background:#F0F8FF;margin:8pt 0;font-style:italic}'
+    +'</style>'
+    +'<xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml>'
+    +'</head><body>'
+    +'<h1>'+docLabel+'</h1>'
+    +'<p style="font-size:9pt;color:#666;font-family:Courier New,monospace;border-bottom:1pt solid #eee;padding-bottom:6pt;margin-bottom:14pt">'
+    +'Generated by NexGenLegal · NexGen Ultra AI · Corverxis Technologies · '+now+'</p>'
+    +htmlContent
+    +'<p style="margin-top:30pt;padding-top:8pt;border-top:0.5pt solid #ddd;font-size:8pt;color:#999;font-family:Courier New,monospace">'
+    +'NexGenLegal · corverxis.com · This document was AI-generated and should be reviewed by a qualified legal professional before use.</p>'
+    +'</body></html>';
+  // Download as .doc (Word-compatible HTML)
+  var blob=new Blob([wordXml],{type:'application/msword'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  a.href=url;
+  a.download='nexgenlegal-'+docType+'-'+Date.now()+'.doc';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function(){URL.revokeObjectURL(url);},3000);
+  toast('Word document downloaded ✓ — opens in Microsoft Word','ok');
 }
+
+// ldpPrint removed — PDF download handled by ldpDownloadPdf()
 
 function ldpSave(){
   if(!_ldpContent){toast('No document to save','err');return;}
@@ -1083,7 +1148,7 @@ function ldpLoad(id){
   var docEl=document.getElementById('ldpDoc');
   if(docEl){docEl.style.display='block';docEl.innerHTML=ldpMdR(doc.content);}
   document.getElementById('ldpOutTitle').textContent=doc.title;
-  ['ldpCopyBtn','ldpDlBtn','ldpSaveBtn','ldpPrintBtn'].forEach(function(id2){var e=document.getElementById(id2);if(e)e.style.display='inline-block';});
+  ['ldpCopyBtn','ldpPdfBtn','ldpDocxBtn','ldpSaveBtn'].forEach(function(id2){var e=document.getElementById(id2);if(e)e.style.display='inline-block';});
   toast('Loaded: '+doc.title+' ✓','ok');
 }
 
