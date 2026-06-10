@@ -578,6 +578,8 @@ footer a:hover{color:var(--text)}
     </div>
     <button onclick="closeLiveDemo()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:2px 8px">&#x2715;</button>
   </div>
+  <!-- FREE TRIAL COUNTER BAR -->
+  <div id="freeDocCounter" style="display:none;align-items:center;gap:10px;padding:6px 20px;background:rgba(0,200,255,.05);border-bottom:1px solid rgba(0,200,255,.1);flex-shrink:0;flex-wrap:wrap"></div>
   <div style="display:flex;align-items:center;gap:8px;padding:8px 20px;background:rgba(0,200,255,.04);border-bottom:1px solid rgba(0,200,255,.08);flex-shrink:0;flex-wrap:wrap">
     
   </div>
@@ -891,6 +893,16 @@ function ldpExample(type,matter,jurisdiction){
 
 async function ldpGenerate(){
   if(_ldpRunning)return;
+  // ── FREE TRIAL COUNTER ──────────────────────────────────────
+  var user=null;try{user=JSON.parse(localStorage.getItem('ngl_user')||'null');}catch(e){}
+  if(!user||(user&&!user.paid)){
+    var docsUsed=0;try{docsUsed=parseInt(localStorage.getItem('ngl_docs_used')||'0');}catch(e){}
+    if(docsUsed>=5){
+      showUpgradeWall();
+      return;
+    }
+  }
+  // ────────────────────────────────────────────────────────────
   var key=_ldpKey;
   if(!key){toast('Authentication error — please refresh','err');return;}
   var docType=(document.getElementById('ldpDocType')||{}).value||'nda';
@@ -951,7 +963,22 @@ async function ldpGenerate(){
     ['ldpCopyBtn','ldpDlBtn','ldpSaveBtn','ldpPrintBtn'].forEach(function(id){var e=document.getElementById(id);if(e)e.style.display='inline-block';});
     document.getElementById('ldpStatusTxt').textContent='NexGen Ultra · Complete ✓';
     var dot=document.getElementById('ldpDot');if(dot)dot.style.background='#00E87A';
-    toast(docLabel+' generated ✓','ok');
+    // Increment free doc counter
+    var user2=null;try{user2=JSON.parse(localStorage.getItem('ngl_user')||'null');}catch(e){}
+    if(!user2||!user2.paid){
+      var used=0;try{used=parseInt(localStorage.getItem('ngl_docs_used')||'0');}catch(e){}
+      used++;
+      try{localStorage.setItem('ngl_docs_used',used);}catch(e){}
+      var remaining=5-used;
+      updateDocCounter(used);
+      if(remaining<=0){
+        toast(docLabel+' generated ✓ — You have used all 5 free documents. Upgrade to continue.','ok');
+      } else {
+        toast(docLabel+' generated ✓ — '+remaining+' free document'+(remaining===1?'':'s')+' remaining','ok');
+      }
+    } else {
+      toast(docLabel+' generated ✓','ok');
+    }
     setTimeout(function(){document.getElementById('ldpStatusTxt').textContent='Ready';var d2=document.getElementById('ldpDot');if(d2)d2.style.background='var(--accent)';},3000);
   }catch(err){
     clearInterval(miv);
@@ -1071,36 +1098,47 @@ renderDocs();
 renderJurisdictions();
 
 
-// ── COMMERCIALIZATION — AUTH + PAYWALL ──────────────────────────
-(function(){
-  // Check saved session on load
-  try {
-    var u = JSON.parse(localStorage.getItem('ngl_user')||'null');
-    if (u && u.paid) {
-      document.getElementById('authWall').classList.add('hidden');
-      showUserBar(u);
-      return;
-    }
-    if (u && !u.paid) {
-      document.getElementById('authWall').classList.add('hidden');
-      showPaywall();
-      return;
-    }
-  } catch(e) {}
-  // No session — show auth wall
-})();
+
+// ── FREE TRIAL COUNTER & UPGRADE WALL ──────────────────────────────────────
+
+function updateDocCounter(used) {
+  var remaining = Math.max(0, 5 - used);
+  var el = document.getElementById('freeDocCounter');
+  if (!el) return;
+  el.style.display = 'flex';
+  if (remaining > 0) {
+    el.innerHTML = '<span style="font-family:var(--mono);font-size:9px;color:var(--accent);margin-right:8px">FREE TRIAL</span>'
+      + '<span style="font-family:var(--mono);font-size:9px;color:var(--dim)">' + remaining + ' document' + (remaining === 1 ? '' : 's') + ' remaining</span>'
+      + '<button onclick="showUpgradeWall()" style="margin-left:auto;padding:3px 10px;background:var(--accent);color:#04080E;border:none;border-radius:4px;font-family:var(--mono);font-size:8px;font-weight:700;cursor:pointer;letter-spacing:.5px">Upgrade</button>';
+  } else {
+    el.innerHTML = '<span style="font-family:var(--mono);font-size:9px;color:#FF6B6B;margin-right:8px">FREE TRIAL USED</span>'
+      + '<span style="font-family:var(--mono);font-size:9px;color:var(--dim)">Upgrade to continue generating</span>'
+      + '<button onclick="showUpgradeWall()" style="margin-left:auto;padding:3px 10px;background:var(--accent);color:#04080E;border:none;border-radius:4px;font-family:var(--mono);font-size:8px;font-weight:700;cursor:pointer;letter-spacing:.5px">Upgrade →</button>';
+  }
+}
+
+function showUpgradeWall() {
+  var wall = document.getElementById('paywallWall');
+  if (wall) wall.classList.add('open');
+  var title = document.querySelector('.paywall-title');
+  if (title) title.textContent = 'Upgrade to Continue';
+  var sub = document.querySelector('.paywall-sub');
+  if (sub) sub.innerHTML = 'You have used all <strong>5 free documents</strong>. Choose a plan to keep generating.<br>Early Access pricing — locks in forever for the first 100 customers.';
+}
+
+// ── AUTH FUNCTIONS ───────────────────────────────────────────────────────────
 
 function authShowTab(tab) {
-  var up = document.getElementById('formSignUp');
-  var inn = document.getElementById('formSignIn');
-  var tabUp = document.getElementById('tabSignUp');
-  var tabIn = document.getElementById('tabSignIn');
+  var up   = document.getElementById('formSignUp');
+  var inn  = document.getElementById('formSignIn');
+  var tabU = document.getElementById('tabSignUp');
+  var tabI = document.getElementById('tabSignIn');
   if (tab === 'up') {
-    up.classList.remove('hidden'); inn.classList.add('hidden');
-    tabUp.classList.add('active'); tabIn.classList.remove('active');
+    up.classList.remove('hidden');  inn.classList.add('hidden');
+    tabU.classList.add('active');   tabI.classList.remove('active');
   } else {
     inn.classList.remove('hidden'); up.classList.add('hidden');
-    tabIn.classList.add('active'); tabUp.classList.remove('active');
+    tabI.classList.add('active');   tabU.classList.remove('active');
   }
   document.getElementById('authMsgUp').textContent = '';
   document.getElementById('authMsgIn').textContent = '';
@@ -1114,88 +1152,108 @@ function authMsg(id, msg, type) {
 }
 
 function authSignUp() {
-  var name  = (document.getElementById('suName')||{}).value||'';
-  var org   = (document.getElementById('suOrg')||{}).value||'';
-  var email = (document.getElementById('suEmail')||{}).value||'';
-  var pass  = (document.getElementById('suPass')||{}).value||'';
-  if (!name.trim())  { authMsg('authMsgUp','Enter your full name','err'); return; }
-  if (!email || !email.includes('@')) { authMsg('authMsgUp','Enter a valid work email','err'); return; }
-  if (!pass || pass.length < 8) { authMsg('authMsgUp','Password must be at least 8 characters','err'); return; }
+  var name  = (document.getElementById('suName')  || {}).value || '';
+  var org   = (document.getElementById('suOrg')   || {}).value || '';
+  var email = (document.getElementById('suEmail') || {}).value || '';
+  var pass  = (document.getElementById('suPass')  || {}).value || '';
+  if (!name.trim())                     { authMsg('authMsgUp', 'Enter your full name', 'err'); return; }
+  if (!email || !email.includes('@'))   { authMsg('authMsgUp', 'Enter a valid work email', 'err'); return; }
+  if (!pass || pass.length < 8)         { authMsg('authMsgUp', 'Password must be at least 8 characters', 'err'); return; }
   var accounts = [];
-  try { accounts = JSON.parse(localStorage.getItem('ngl_accounts')||'[]'); } catch(e) {}
-  if (accounts.find(function(a){ return a.email.toLowerCase()===email.toLowerCase(); })) {
-    authMsg('authMsgUp','An account with this email already exists. Sign in instead.','err'); return;
+  try { accounts = JSON.parse(localStorage.getItem('ngl_accounts') || '[]'); } catch(e) {}
+  if (accounts.find(function(a) { return a.email.toLowerCase() === email.toLowerCase(); })) {
+    authMsg('authMsgUp', 'An account with this email already exists. Sign in instead.', 'err'); return;
   }
-  var account = { name:name, org:org, email:email, pass:btoa(pass), paid:false, plan:'' };
+  var account = { name: name, org: org, email: email, pass: btoa(pass), paid: false, plan: '' };
   accounts.push(account);
   try { localStorage.setItem('ngl_accounts', JSON.stringify(accounts)); } catch(e) {}
-  var user = { name:name, org:org, email:email, paid:false, plan:'' };
+  var user = { name: name, org: org, email: email, paid: false, plan: '' };
   try { localStorage.setItem('ngl_user', JSON.stringify(user)); } catch(e) {}
-  authMsg('authMsgUp', 'Account created! Redirecting…', 'ok');
-  setTimeout(function(){
+  authMsg('authMsgUp', 'Account created! Starting your free trial ✓', 'ok');
+  setTimeout(function() {
     document.getElementById('authWall').classList.add('hidden');
-    showPaywall();
+    showUserBar(user);  // ← straight to platform, no paywall
   }, 800);
 }
 
 function authSignIn() {
-  var email = (document.getElementById('siEmail')||{}).value||'';
-  var pass  = (document.getElementById('siPass')||{}).value||'';
-  if (!email || !email.includes('@')) { authMsg('authMsgIn','Enter a valid email','err'); return; }
-  if (!pass) { authMsg('authMsgIn','Enter your password','err'); return; }
+  var email = (document.getElementById('siEmail') || {}).value || '';
+  var pass  = (document.getElementById('siPass')  || {}).value || '';
+  if (!email || !email.includes('@')) { authMsg('authMsgIn', 'Enter a valid email', 'err'); return; }
+  if (!pass)                          { authMsg('authMsgIn', 'Enter your password', 'err'); return; }
   var accounts = [];
-  try { accounts = JSON.parse(localStorage.getItem('ngl_accounts')||'[]'); } catch(e) {}
-  var account = accounts.find(function(a){ return a.email.toLowerCase()===email.toLowerCase(); });
-  if (!account) { authMsg('authMsgIn','No account found. Create an account first.','err'); return; }
-  if (account.pass !== btoa(pass)) { authMsg('authMsgIn','Incorrect password.','err'); return; }
-  var user = { name:account.name, org:account.org, email:account.email, paid:account.paid||false, plan:account.plan||'' };
+  try { accounts = JSON.parse(localStorage.getItem('ngl_accounts') || '[]'); } catch(e) {}
+  var account = accounts.find(function(a) { return a.email.toLowerCase() === email.toLowerCase(); });
+  if (!account)                              { authMsg('authMsgIn', 'No account found. Create an account first.', 'err'); return; }
+  if (account.pass !== btoa(pass))           { authMsg('authMsgIn', 'Incorrect password.', 'err'); return; }
+  var user = { name: account.name, org: account.org, email: account.email, paid: account.paid || false, plan: account.plan || '' };
   try { localStorage.setItem('ngl_user', JSON.stringify(user)); } catch(e) {}
   document.getElementById('authWall').classList.add('hidden');
-  if (user.paid) {
-    showUserBar(user);
-  } else {
-    showPaywall();
-  }
+  showUserBar(user);  // ← always straight to platform
 }
 
 function showUserBar(user) {
-  var bar = document.getElementById('authUserBar');
+  var bar    = document.getElementById('authUserBar');
   var nameEl = document.getElementById('authUserName');
-  if (bar) bar.style.display = 'flex';
-  if (nameEl) nameEl.textContent = (user.name || user.email) + (user.plan ? ' · ' + user.plan : '');
+  if (bar)    bar.style.display = 'flex';
+  if (nameEl) nameEl.textContent = (user.name || user.email) + (user.paid ? ' · ' + (user.plan || 'Subscribed') : ' · Free Trial');
+  if (!user.paid) {
+    var used = 0;
+    try { used = parseInt(localStorage.getItem('ngl_docs_used') || '0'); } catch(e) {}
+    setTimeout(function() { updateDocCounter(used); }, 200);
+  } else {
+    var bar2 = document.getElementById('freeDocCounter');
+    if (bar2) bar2.style.display = 'none';
+  }
 }
 
 function authSignOut() {
   try { localStorage.removeItem('ngl_user'); } catch(e) {}
   var bar = document.getElementById('authUserBar');
   if (bar) bar.style.display = 'none';
+  var counter = document.getElementById('freeDocCounter');
+  if (counter) counter.style.display = 'none';
   document.getElementById('authWall').classList.remove('hidden');
   authShowTab('in');
 }
 
-function showPaywall() {
-  document.getElementById('paywallWall').classList.add('open');
-}
-
 function paywallConfirmPaid() {
   var user = null;
-  try { user = JSON.parse(localStorage.getItem('ngl_user')||'null'); } catch(e) {}
+  try { user = JSON.parse(localStorage.getItem('ngl_user') || 'null'); } catch(e) {}
   if (!user) return;
   user.paid = true;
   user.plan = 'Active Subscription';
   try { localStorage.setItem('ngl_user', JSON.stringify(user)); } catch(e) {}
-  // Update accounts list too
   var accounts = [];
-  try { accounts = JSON.parse(localStorage.getItem('ngl_accounts')||'[]'); } catch(e) {}
-  var idx = accounts.findIndex(function(a){ return a.email.toLowerCase()===user.email.toLowerCase(); });
+  try { accounts = JSON.parse(localStorage.getItem('ngl_accounts') || '[]'); } catch(e) {}
+  var idx = accounts.findIndex(function(a) { return a.email.toLowerCase() === user.email.toLowerCase(); });
   if (idx > -1) { accounts[idx].paid = true; accounts[idx].plan = 'Active Subscription'; }
   try { localStorage.setItem('ngl_accounts', JSON.stringify(accounts)); } catch(e) {}
+  try { localStorage.removeItem('ngl_docs_used'); } catch(e) {}  // reset free counter
   document.getElementById('paywallWall').classList.remove('open');
+  var counter = document.getElementById('freeDocCounter');
+  if (counter) counter.style.display = 'none';
+  var title = document.querySelector('.paywall-title');
+  if (title) title.textContent = 'Choose Your Plan';
   showUserBar(user);
-  toast('Welcome to NexGenLegal ✓ — full access granted', 'ok');
+  toast('Welcome to NexGenLegal ✓ — unlimited access unlocked', 'ok');
 }
 
+// ── STARTUP — check session on page load ─────────────────────────────────────
+(function() {
+  try {
+    var u = JSON.parse(localStorage.getItem('ngl_user') || 'null');
+    if (u) {
+      document.getElementById('authWall').classList.add('hidden');
+      showUserBar(u);  // ← paid OR free, always goes to platform
+      return;
+    }
+  } catch(e) {}
+  // No session — auth wall stays visible
+})();
+
 </script>
+
 
 <!-- AUTH WALL -->
 <div class="auth-wall" id="authWall">
@@ -1213,8 +1271,9 @@ function paywallConfirmPaid() {
       <input class="auth-inp" id="suOrg" placeholder="Organisation / Law Firm" autocomplete="organization"/>
       <input class="auth-inp" id="suEmail" type="email" placeholder="Work Email" autocomplete="email"/>
       <input class="auth-inp" id="suPass" type="password" placeholder="Password (min 8 characters)" autocomplete="new-password"/>
-      <button class="auth-btn" onclick="authSignUp()">Create Account &#x2192;</button>
+      <button class="auth-btn" onclick="authSignUp()">Start Free Trial &#x2192;</button>
       <div class="auth-msg" id="authMsgUp"></div>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--muted);text-align:center;margin-top:4px">5 free documents · no credit card required</div>
     </div>
     <div class="auth-form hidden" id="formSignIn">
       <input class="auth-inp" id="siEmail" type="email" placeholder="Email" autocomplete="email"/>
@@ -1225,7 +1284,7 @@ function paywallConfirmPaid() {
   </div>
 </div>
 
-<!-- PAYWALL -->
+<!-- PAYWALL / UPGRADE WALL -->
 <div class="paywall" id="paywallWall">
   <div class="paywall-box">
     <div style="text-align:center;margin-bottom:4px"><span style="font-size:36px">&#x2696;&#xFE0F;</span></div>
@@ -1237,7 +1296,7 @@ function paywallConfirmPaid() {
         <div class="pw-tier">Solo Practitioner</div>
         <div class="pw-price" style="font-size:13px;color:var(--dim);text-decoration:line-through;font-family:var(--body);margin-bottom:0">Was $290/mo</div>
         <div class="pw-price">$49<sub>/mo</sub></div>
-        <div class="pw-desc">For individual lawyers, barristers, and solo legal consultants. 83% off — Early Access.</div>
+        <div class="pw-desc">For individual lawyers, barristers &amp; solo consultants. 83% off — Early Access.</div>
         <ul class="pw-features">
           <li>All 5 platform modules</li>
           <li>50 document generations/mo</li>
@@ -1245,7 +1304,7 @@ function paywallConfirmPaid() {
           <li>PDF &amp; DOCX export</li>
           <li>E-signature ready</li>
         </ul>
-        <button class="pw-btn sec" onclick="window.open('https://buy.stripe.com/5kQfZheJs3rf0YzgvU1oI07','_blank')">Start Free Trial &#x2192;</button>
+        <button class="pw-btn sec" onclick="window.open('https://buy.stripe.com/5kQfZheJs3rf0YzgvU1oI07','_blank')">Get Started &#x2192;</button>
       </div>
 
       <div class="pw-card featured">
@@ -1253,13 +1312,13 @@ function paywallConfirmPaid() {
         <div class="pw-tier">Law Firm</div>
         <div class="pw-price" style="font-size:13px;color:var(--dim);text-decoration:line-through;font-family:var(--body);margin-bottom:0">Was $990/mo</div>
         <div class="pw-price">$149<sub>/mo</sub></div>
-        <div class="pw-desc">For law firms, chambers, and legal departments. 85% off — Early Access.</div>
+        <div class="pw-desc">For law firms, chambers &amp; legal departments. 85% off — Early Access.</div>
         <ul class="pw-features">
           <li>Unlimited document generation</li>
           <li>180+ jurisdictions</li>
           <li>Multi-language output</li>
           <li>Client portal &amp; collaboration</li>
-          <li>Clause library (10,000+ clauses)</li>
+          <li>10,000+ clause library</li>
         </ul>
         <button class="pw-btn prim" onclick="window.open('https://buy.stripe.com/4gMaEXdFo8Lz22DgvU1oI08','_blank')">Get Started &#x2192;</button>
       </div>
@@ -1268,7 +1327,7 @@ function paywallConfirmPaid() {
         <div class="pw-tier">Government</div>
         <div class="pw-price" style="font-size:13px;color:var(--dim);text-decoration:line-through;font-family:var(--body);margin-bottom:0">Was $2,500/mo</div>
         <div class="pw-price">$499<sub>/mo</sub></div>
-        <div class="pw-desc">For ministries, parliaments, and public sector agencies. 80% off — Early Access.</div>
+        <div class="pw-desc">For ministries, parliaments &amp; public agencies. 80% off — Early Access.</div>
         <ul class="pw-features">
           <li>Unlimited everything</li>
           <li>Legislative system integration</li>
@@ -1282,7 +1341,7 @@ function paywallConfirmPaid() {
       <div class="pw-card">
         <div class="pw-tier">Enterprise</div>
         <div class="pw-price" style="font-size:20px;padding-top:4px">Custom<sub style="font-size:11px"> /mo</sub></div>
-        <div class="pw-desc">For multinationals and international organisations. Private cloud, white-label, custom AI.</div>
+        <div class="pw-desc">Multinationals &amp; international organisations. Private cloud, white-label, custom AI.</div>
         <ul class="pw-features">
           <li>Everything in Government</li>
           <li>Private cloud / on-premise</li>
@@ -1296,8 +1355,7 @@ function paywallConfirmPaid() {
     </div>
     <div class="pw-already">Already subscribed? <a onclick="paywallConfirmPaid()">Click here after completing payment &#x2192;</a></div>
   </div>
-</div></div>
-
+</div>
 
 </body>
 </html>
